@@ -40,9 +40,68 @@ html, body {
   background: var(--bg); border-bottom: 1px solid var(--line);
 }
 .topbar h1 { font-size: 18px; margin: 0; }
+.topbar-right { display: flex; align-items: center; gap: 10px; }
 .updated-at { font-size: 11px; color: var(--sub); }
+.settings-btn {
+  border: none; background: none; font-size: 18px; line-height: 1; padding: 4px;
+  cursor: pointer; opacity: .75;
+}
+.settings-btn:active { opacity: .5; }
 
 main { padding: 12px 16px calc(24px + var(--safe-bottom)); }
+
+.record-panel {
+  display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px;
+  margin-bottom: 12px;
+}
+.record-panel.hidden { display: none; }
+.record-btn {
+  padding: 12px 8px; border-radius: 10px; border: 1px solid var(--line);
+  background: var(--card); color: var(--text); font-size: 14px; cursor: pointer;
+  transition: background .15s, color .15s;
+}
+.record-btn:active { opacity: .7; }
+.record-btn.done-today { background: var(--accent); color: #fff; border-color: var(--accent); }
+.record-btn.pending { opacity: .5; }
+.record-setup-hint {
+  grid-column: 1 / -1; font-size: 12px; color: var(--sub); text-align: center;
+  padding: 10px; border: 1px dashed var(--line); border-radius: 10px; cursor: pointer;
+}
+
+.modal {
+  position: fixed; inset: 0; background: rgba(0,0,0,.4);
+  display: flex; align-items: flex-end; justify-content: center; z-index: 50;
+}
+.modal.hidden { display: none; }
+.modal-card {
+  background: var(--card); color: var(--text); width: 100%; max-width: 480px;
+  border-radius: 16px 16px 0 0; padding: 18px 18px calc(18px + var(--safe-bottom));
+}
+.modal-card h2 { font-size: 16px; margin: 0 0 8px; }
+.modal-note { font-size: 12px; color: var(--sub); line-height: 1.6; margin: 0 0 14px; }
+.modal-note code { background: var(--accent-weak); padding: 1px 4px; border-radius: 4px; }
+.modal-card label {
+  display: block; font-size: 12px; color: var(--sub); margin-bottom: 12px;
+}
+.modal-card input {
+  display: block; width: 100%; margin-top: 4px; padding: 9px 10px;
+  border: 1px solid var(--line); border-radius: 8px; background: var(--bg);
+  color: var(--text); font-size: 14px;
+}
+.modal-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 6px; }
+.btn-primary, .btn-secondary {
+  padding: 9px 16px; border-radius: 8px; font-size: 13px; cursor: pointer; border: 1px solid var(--line);
+}
+.btn-primary { background: var(--accent); color: #fff; border-color: var(--accent); font-weight: 700; }
+.btn-secondary { background: var(--card); color: var(--text); }
+
+.toast {
+  position: fixed; left: 50%; bottom: calc(20px + var(--safe-bottom));
+  transform: translateX(-50%); background: var(--text); color: var(--bg);
+  padding: 10px 16px; border-radius: 10px; font-size: 13px; z-index: 60;
+  opacity: 0; transition: opacity .2s; pointer-events: none;
+}
+.toast.show { opacity: .95; }
 
 .range-toggle { display: flex; gap: 8px; margin-bottom: 12px; }
 .range-btn {

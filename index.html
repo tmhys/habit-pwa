@@ -15,10 +15,15 @@
 
 <header class="topbar">
   <h1>習慣グリッド</h1>
-  <div id="updated-at" class="updated-at"></div>
+  <div class="topbar-right">
+    <div id="updated-at" class="updated-at"></div>
+    <button id="settings-btn" class="settings-btn" aria-label="設定" title="記録の設定">⚙️</button>
+  </div>
 </header>
 
 <main>
+  <section id="record-panel" class="record-panel"></section>
+
   <section class="range-toggle">
     <button class="range-btn" data-days="14">2週間</button>
     <button class="range-btn active" data-days="30">1か月</button>
@@ -40,8 +45,30 @@
   <p class="about">
     データは <a href="https://github.com/tmhys/github_obsidian" target="_blank" rel="noopener">github_obsidian</a>
     （非公開）から、実施した日付だけを自動転載しています。日記の文章はここには含まれません。
+    技術士勉強・お酒・コーヒー・筋トレの記録は、上のボタンからこのアプリで直接行えます
+    （英語学習・タイマーはアプリ起動の自動検知のままです）。
   </p>
 </main>
+
+<div id="settings-modal" class="modal hidden">
+  <div class="modal-card">
+    <h2>記録ボタンの設定</h2>
+    <p class="modal-note">
+      <code>habit-relay</code>（GASの中継役）のURLと合言葉を入力してください。
+      詳しくは <code>tmhys/gas</code> の <code>habit-relay/README.md</code> を参照。
+    </p>
+    <label>中継URL
+      <input id="settings-url" type="url" placeholder="https://script.google.com/macros/s/.../exec">
+    </label>
+    <label>合言葉（RELAY_TOKEN）
+      <input id="settings-token" type="text" placeholder="RELAY_TOKENの値">
+    </label>
+    <div class="modal-actions">
+      <button id="settings-cancel" class="btn-secondary">閉じる</button>
+      <button id="settings-save" class="btn-primary">保存</button>
+    </div>
+  </div>
+</div>
 
 <script src="app.js"></script>
 </body>

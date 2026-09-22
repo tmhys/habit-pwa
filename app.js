@@ -1,18 +1,28 @@
 /**
- * 習慣グリッド ビューア。
+ * 習慣グリッド ビューア + 手動記録ボタン。
  *
- * データ元は同じリポジトリの data/habits.json。tmhys/github_obsidian
+ * 表示データは同じリポジトリの data/habits.json。tmhys/github_obsidian
  * （非公開、日記本体を含む）から、実施した日付だけを自動転載したもの。
  * このアプリ・このリポジトリのどこにも日記の文章は入らない。
  *
- * 読み取り専用。記録はTasker（アプリ起動検知・ワンタップボタン）側で行う
- * （tmhys/github_obsidian の _scripts/README.md「習慣トラッカー」参照）。
+ * 記録は4つの手動habit（技術士勉強・お酒・コーヒー・筋トレ）だけ、この画面の
+ * ボタンから行える。実際にGitHubへ書き込む権限（PAT）は持たず、専用の中継役
+ * habit-relay（tmhys/gas、GAS）に軽量な合言葉だけを渡して依頼する
+ * （tmhys/gas の habit-relay/README.md 参照）。英語学習・タイマーはアプリ起動の
+ * 自動検知のままなので、ここには出てこない（Tasker側で完結）。
  */
 
 const DATA_URL = 'data/habits.json';
+const RECORDABLE_HABITS = [
+  { id: 'gijutsushi', label: '📘 技術士勉強' },
+  { id: 'alcohol', label: '🍺 お酒' },
+  { id: 'coffee', label: '☕ コーヒー' },
+  { id: 'strength', label: '💪 筋トレ' },
+];
 
 let fullData = null; // {generatedAt, days:[...], habits:[{id,label,mode,done:[...]}]}
 let rangeDays = 30;
+let recordPending = new Set();
 
 function todayYmd() {
   const d = new Date();
@@ -20,6 +30,7 @@ function todayYmd() {
 }
 
 async function load() {
+  renderRecordPanel(); // データ取得を待たず、まずボタンだけ出す
   try {
     const res = await fetch(DATA_URL, { cache: 'no-store' });
     if (!res.ok) throw new Error('HTTP ' + res.status);
@@ -27,11 +38,12 @@ async function load() {
   } catch (e) {
     document.getElementById('grid-wrap').innerHTML =
       '<div class="empty-note">データを読み込めませんでした（' + escapeHtml(String(e.message || e)) + '）。<br>' +
-      'まだ一度もTaskerから記録していない場合は、最初の1件を記録すると表示されます。</div>';
+      'まだ一度も記録していない場合は、上のボタンで最初の1件を記録すると表示されます。</div>';
     return;
   }
   renderUpdatedAt();
   render();
+  renderRecordPanel();
 }
 
 function renderUpdatedAt() {
@@ -134,6 +146,134 @@ function escapeHtml(s) {
     '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
   }[c]));
 }
+
+// ---- 記録ボタン（habit-relay 経由） ----
+
+function relaySettings() {
+  try {
+    return {
+      url: localStorage.getItem('habitRelayUrl') || '',
+      token: localStorage.getItem('habitRelayToken') || '',
+    };
+  } catch (e) {
+    return { url: '', token: '' };
+  }
+}
+
+function saveRelaySettings(url, token) {
+  try {
+    localStorage.setItem('habitRelayUrl', url);
+    localStorage.setItem('habitRelayToken', token);
+  } catch (e) { /* プライベートモード等で保存できなくても致命的ではない */ }
+}
+
+function renderRecordPanel() {
+  const panel = document.getElementById('record-panel');
+  const { url, token } = relaySettings();
+  panel.innerHTML = '';
+
+  if (!url || !token) {
+    const hint = document.createElement('div');
+    hint.className = 'record-setup-hint';
+    hint.textContent = '⚙️ タップして記録ボタンを設定（habit-relayのURL・合言葉）';
+    hint.addEventListener('click', openSettings);
+    panel.appendChild(hint);
+    return;
+  }
+
+  const today = todayYmd();
+  const doneMap = {};
+  if (fullData && fullData.habits) {
+    fullData.habits.forEach((h) => { doneMap[h.id] = new Set(h.done || []); });
+  }
+
+  RECORDABLE_HABITS.forEach((h) => {
+    const btn = document.createElement('button');
+    const doneToday = doneMap[h.id] && doneMap[h.id].has(today);
+    btn.className = 'record-btn' + (doneToday ? ' done-today' : '');
+    btn.textContent = h.label;
+    btn.disabled = recordPending.has(h.id);
+    if (recordPending.has(h.id)) btn.classList.add('pending');
+    btn.addEventListener('click', () => recordHabit(h.id, h.label));
+    panel.appendChild(btn);
+  });
+}
+
+async function recordHabit(habitId, label) {
+  const { url, token } = relaySettings();
+  if (!url || !token) { openSettings(); return; }
+
+  recordPending.add(habitId);
+  renderRecordPanel();
+
+  try {
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' }, // CORSプリフライトを避ける
+      body: JSON.stringify({ token, habit: habitId, epoch: String(Math.floor(Date.now() / 1000)) }),
+    });
+    const data = await res.json();
+    if (!data.ok) throw new Error(data.error || 'unknown error');
+
+    showToast(label + ' を記録しました');
+    if (fullData && fullData.habits) {
+      const today = todayYmd();
+      const h = fullData.habits.find((x) => x.id === habitId);
+      if (h) {
+        h.done = h.done || [];
+        if (!h.done.includes(today)) h.done.push(today);
+      }
+      if (!fullData.days.includes(today)) fullData.days.push(today);
+    }
+  } catch (e) {
+    showToast('記録に失敗しました（' + String(e.message || e) + '）');
+  } finally {
+    recordPending.delete(habitId);
+    renderRecordPanel();
+    render();
+  }
+}
+
+let toastTimer = null;
+function showToast(text) {
+  let el = document.querySelector('.toast');
+  if (!el) {
+    el = document.createElement('div');
+    el.className = 'toast';
+    document.body.appendChild(el);
+  }
+  el.textContent = text;
+  el.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => el.classList.remove('show'), 2400);
+}
+
+// ---- 設定モーダル ----
+
+function openSettings() {
+  const { url, token } = relaySettings();
+  document.getElementById('settings-url').value = url;
+  document.getElementById('settings-token').value = token;
+  document.getElementById('settings-modal').classList.remove('hidden');
+}
+
+function closeSettings() {
+  document.getElementById('settings-modal').classList.add('hidden');
+}
+
+document.getElementById('settings-btn').addEventListener('click', openSettings);
+document.getElementById('settings-cancel').addEventListener('click', closeSettings);
+document.getElementById('settings-modal').addEventListener('click', (e) => {
+  if (e.target.id === 'settings-modal') closeSettings();
+});
+document.getElementById('settings-save').addEventListener('click', () => {
+  const url = document.getElementById('settings-url').value.trim();
+  const token = document.getElementById('settings-token').value.trim();
+  saveRelaySettings(url, token);
+  closeSettings();
+  renderRecordPanel();
+  showToast('設定を保存しました');
+});
 
 document.querySelectorAll('.range-btn').forEach((btn) => {
   btn.addEventListener('click', () => {
