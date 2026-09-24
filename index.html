@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>習慣グリッド</title>
-<meta name="description" content="github_obsidianの習慣ログを、日付×習慣のグリッドで表示するビューア">
+<meta name="description" content="github_obsidianの習慣ログを、Loop Habit Tracker風の一覧・詳細画面で表示・記録するPWA">
 <meta name="theme-color" content="#4b3a8a">
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" href="icons/icon-192.png">
@@ -14,48 +14,47 @@
 <body>
 
 <header class="topbar">
-  <h1>習慣グリッド</h1>
+  <h1>習慣</h1>
   <div class="topbar-right">
     <div id="updated-at" class="updated-at"></div>
-    <button id="settings-btn" class="settings-btn" aria-label="設定" title="記録の設定">⚙️</button>
+    <button id="settings-btn" class="icon-btn" aria-label="設定" title="設定">⚙️</button>
   </div>
 </header>
 
 <main>
-  <section id="record-panel" class="record-panel"></section>
+  <div id="setup-hint" class="setup-hint hidden">
+    ⚙️ タップして記録の設定をする（habit-relayのURL・合言葉）
+  </div>
 
-  <section class="range-toggle">
-    <button class="range-btn" data-days="14">2週間</button>
-    <button class="range-btn active" data-days="30">1か月</button>
-    <button class="range-btn" data-days="60">2か月</button>
-  </section>
-
-  <section id="grid-wrap" class="grid-wrap">
+  <section id="habit-list" class="habit-list">
     <div id="loading" class="loading">読み込み中…</div>
   </section>
 
-  <section id="detail" class="detail hidden"></section>
-
-  <section class="legend">
-    <span class="legend-item"><span class="cell done-sample"></span> 実施</span>
-    <span class="legend-item"><span class="cell today-sample"></span> 今日</span>
-    <span class="legend-item"><span class="cell"></span> 未実施</span>
-  </section>
-
   <p class="about">
+    チェック欄をタップすると、その日の実施を記録します（数秒間は「元に戻す」で取り消せます）。
+    習慣名をタップすると、スコア・履歴・カレンダー・連続記録の詳細が見られます。<br>
+    記録できるのは技術士勉強・お酒・コーヒー・筋トレの4つです。日記・英語学習・タイマーは自動判定のままです。<br>
     データは <a href="https://github.com/tmhys/github_obsidian" target="_blank" rel="noopener">github_obsidian</a>
     （非公開）から、実施した日付だけを自動転載しています。日記の文章はここには含まれません。
-    技術士勉強・お酒・コーヒー・筋トレの記録は、上のボタンからこのアプリで直接行えます
-    （英語学習・タイマーはアプリ起動の自動検知のままです）。
   </p>
 </main>
 
+<!-- 習慣の詳細（Loop Habit Tracker の習慣画面に相当） -->
+<div id="detail" class="detail-screen hidden" role="dialog" aria-modal="true">
+  <header class="detail-bar">
+    <button id="detail-back" class="icon-btn back-btn" aria-label="戻る">←</button>
+    <h2 id="detail-title"></h2>
+  </header>
+  <div id="detail-body" class="detail-body"></div>
+</div>
+
 <div id="settings-modal" class="modal hidden">
   <div class="modal-card">
-    <h2>記録ボタンの設定</h2>
+    <h2>設定</h2>
     <p class="modal-note">
-      <code>habit-relay</code>（GASの中継役）のURLと合言葉を入力してください。
+      記録には <code>habit-relay</code>（GASの中継役）のURLと合言葉が必要です。
       詳しくは <code>tmhys/gas</code> の <code>habit-relay/README.md</code> を参照。
+      設定はこの端末のブラウザ内だけに保存されます。
     </p>
     <label>中継URL
       <input id="settings-url" type="url" placeholder="https://script.google.com/macros/s/.../exec">
@@ -63,12 +62,18 @@
     <label>合言葉（RELAY_TOKEN）
       <input id="settings-token" type="text" placeholder="RELAY_TOKENの値">
     </label>
+    <label class="check-label">
+      <input id="settings-reverse" type="checkbox">
+      一覧の日付を「古い日が左・今日が右」の順にする
+    </label>
     <div class="modal-actions">
       <button id="settings-cancel" class="btn-secondary">閉じる</button>
       <button id="settings-save" class="btn-primary">保存</button>
     </div>
   </div>
 </div>
+
+<div id="tooltip" class="tooltip hidden"></div>
 
 <script src="app.js"></script>
 </body>
