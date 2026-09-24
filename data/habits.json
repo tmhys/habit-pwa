@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-09-24 23:02",
+  "generatedAt": "2026-09-24 23:07",
   "days": [
     "2025-08-21",
     "2025-08-22",
@@ -546,7 +546,9 @@
       "label": "📘 技術士勉強",
       "mode": "streak",
       "detect": "tasker-tap",
-      "done": []
+      "done": [
+        "2026-09-24"
+      ]
     },
     {
       "id": "alcohol",
