@@ -3,7 +3,7 @@
 [tmhys/github_obsidian](https://github.com/tmhys/github_obsidian)（非公開）の習慣ログを、
 [Loop Habit Tracker](https://play.google.com/store/apps/details?id=org.isoron.uhabits)
 風の一覧・詳細画面で見るPWA。
-技術士勉強・お酒・コーヒー・筋トレの4つは、一覧のチェック欄をタップして直接記録できる。
+日記（自動判定）以外の習慣は、一覧のチェック欄をタップして直接記録できる。習慣の追加・削除も⚙️からできる。
 
 ## データの流れとプライバシー
 
@@ -24,18 +24,25 @@ habit-pwa (public, このリポジトリ)
 
 ## 記録の方法（2種類）
 
-- **手動4種**（技術士勉強・お酒・コーヒー・筋トレ）: この画面右上の⚙️から
-  `habit-relay`（`tmhys/gas`のGAS中継役）のURLと合言葉を設定すると、
-  チェック欄（または詳細画面のカレンダーのマス）をタップするだけで記録できる。
+- **このアプリから**: 右上の⚙️から `habit-relay`（`tmhys/gas`のGAS中継役）の
+  URLと合言葉を設定すると、チェック欄（または詳細画面のカレンダーのマス）を
+  タップするだけで記録できる。日記（`detect: auto`）以外のどの習慣でも可。
   過去の日のマスをタップすると、その日の正午の時刻で記録する（付け忘れの後追い用）。
   中継役は「追加」しかできないため、タップ後4秒間は送信を待ち、その間に
   トーストの「元に戻す」（または同じマスの再タップ）で取り消せる。
-  送信後の取り消しは Obsidian のストリームノートから行う。このアプリ自身はGitHubへの書き込み権限を
-  一切持たない（中継役の役割・セキュリティ設計は `tmhys/gas` の
-  `habit-relay/README.md` を参照）。
-- **自動2種**（英語学習=Duolingo起動 / タイマー=特定URL起動）: 引き続き
-  Taskerのアプリ起動検知で記録する。手順は `github_obsidian` の
+  送信後の取り消しは Obsidian のストリームノートから行う。
+  このアプリ自身はGitHubへの書き込み権限を一切持たない（中継役の役割・
+  セキュリティ設計は `tmhys/gas` の `habit-relay/README.md` を参照）。
+- **Taskerから**（アプリを開いたら自動で付ける等）: `github_obsidian` の
   [`_scripts/README.md`「習慣トラッカー」](https://github.com/tmhys/github_obsidian/blob/main/_scripts/README.md)を参照。
+  Taskerに渡す習慣IDは、詳細画面の一番下と⚙️の「習慣の管理」に出る。
+
+## 習慣の追加・削除
+
+⚙️の「習慣の管理」から行う。中継役経由で `github_obsidian` の
+`_scripts/habits.json` が書き換わり、数分でこのアプリのデータにも反映される
+（それまでは端末内で先に反映した状態で表示する）。
+削除は定義を外すだけで、記録そのものは Obsidian に残る。同じIDで追加し直せば元に戻る。
 
 いずれの経路で記録しても、下のグリッドの更新経路（`habit-log.yml`によるこの
 リポジトリへの転載）は共通。

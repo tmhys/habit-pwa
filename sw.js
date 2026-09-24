@@ -3,7 +3,7 @@
  * data/habits.json は常に最新を取りに行く（古いまま出すと習慣の可視化として
  * 意味が無いため、明示的にキャッシュ対象から外す）。
  */
-const CACHE_NAME = 'habit-pwa-shell-v3';
+const CACHE_NAME = 'habit-pwa-shell-v4';
 const SHELL_FILES = [
   './',
   './index.html',

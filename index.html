@@ -33,7 +33,7 @@
   <p class="about">
     チェック欄をタップすると、その日の実施を記録します（数秒間は「元に戻す」で取り消せます）。
     習慣名をタップすると、スコア・履歴・カレンダー・連続記録の詳細が見られます。<br>
-    記録できるのは技術士勉強・お酒・コーヒー・筋トレの4つです。日記・英語学習・タイマーは自動判定のままです。<br>
+    習慣の追加・削除は ⚙️ から行えます。日記は日記本体から自動判定するので、ここからは記録できません。<br>
     データは <a href="https://github.com/tmhys/github_obsidian" target="_blank" rel="noopener">github_obsidian</a>
     （非公開）から、実施した日付だけを自動転載しています。日記の文章はここには含まれません。
   </p>
@@ -66,6 +66,21 @@
       <input id="settings-reverse" type="checkbox">
       一覧の日付を「古い日が左・今日が右」の順にする
     </label>
+    <h3 class="modal-sub">習慣の管理</h3>
+    <div id="manage-list" class="manage-list"></div>
+    <div class="manage-add">
+      <input id="new-habit-label" type="text" maxlength="30" placeholder="新しい習慣（例: 🧘 瞑想）">
+      <select id="new-habit-mode" aria-label="種類">
+        <option value="streak">続けたい習慣</option>
+        <option value="log">回数を記録</option>
+      </select>
+      <input id="new-habit-id" type="text" maxlength="32" autocapitalize="off" placeholder="Tasker用ID（任意・英小文字）">
+      <button id="new-habit-add" class="btn-primary">追加</button>
+    </div>
+    <p class="modal-note">
+      削除しても記録は Obsidian に残り、同じIDで追加し直せば元に戻ります。
+      Taskerのアプリ起動検知で記録したい習慣には、分かりやすいID（例: <code>meditation</code>）を付けておくと楽です。
+    </p>
     <div class="modal-actions">
       <button id="settings-cancel" class="btn-secondary">閉じる</button>
       <button id="settings-save" class="btn-primary">保存</button>

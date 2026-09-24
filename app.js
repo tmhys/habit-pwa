@@ -11,11 +11,10 @@
  *  - 詳細: 習慣名をタップすると、概要・スコア推移・履歴・カレンダー・
  *    連続記録・曜日別頻度を出す。
  *
- * 記録は4つの手動habit（技術士勉強・お酒・コーヒー・筋トレ）だけ。
- * 実際にGitHubへ書き込む権限（PAT）は持たず、専用の中継役
+ * 記録・習慣の追加削除は、実際にGitHubへ書き込む権限（PAT）は持たず、専用の中継役
  * habit-relay（tmhys/gas、GAS）に軽量な合言葉だけを渡して依頼する
- * （tmhys/gas の habit-relay/README.md 参照）。英語学習・タイマー・日記は
- * 自動判定のままなので、ここからは記録できない。
+ * （tmhys/gas の habit-relay/README.md 参照）。日記（detect: auto）は日記本体から
+ * 自動判定するので、ここからは記録できない。
  *
  * 中継役は「追加」しかできない（取り消しは不可）。そのためタップ直後は
  * 数秒だけ送信を待ち、その間に「元に戻す」を押せば送らずに済むようにしている。
@@ -24,9 +23,9 @@
  */
 
 const DATA_URL = 'data/habits.json';
-const RECORDABLE = new Set(['gijutsushi', 'alcohol', 'coffee', 'strength']);
 const UNDO_MS = 4000;
 const PENDING_TTL_DAYS = 3; // これより古い「送信済み」はスナップショットに載らなくても捨てる
+const CONFIG_TTL_MS = 86400000; // 習慣の追加・削除の依頼は1日で諦める（失敗していたら元に戻して見せる）
 
 // 習慣ごとの色（identity）。どの画面でも名前と一緒に出すので、色だけで区別はさせない。
 // scripts/validate_palette.js（dataviz skill）でライト背景に対して検証済み。
@@ -40,11 +39,13 @@ const HABIT_COLORS = {
     coffee: '#a0522d', timer: '#0097a7', strength: '#ef5350',
   },
 };
-const FALLBACK_COLOR = { light: '#4b3a8a', dark: '#9b8ae0' };
+// アプリから追加した習慣には、この順で色を割り当てる（上と合わせて検証済み）。
+const EXTRA_COLORS = ['#3949ab', '#d81b60', '#689f38', '#8e24aa', '#00897b'];
 const WEEKDAYS = ['日', '月', '火', '水', '木', '金', '土'];
 
 let fullData = null; // {generatedAt, days:[...], habits:[{id,label,mode,done:[...]}]}
 let pending = loadPending(); // [{habit, ymd, sentAt}] 送信済みだがスナップショット未反映
+let pendingConfig = loadPendingConfig(); // [{op, id, label, mode, sentAt}] 習慣の追加・削除の依頼
 const queued = new Map(); // "habit|ymd" -> timer id（元に戻せる待ち時間中）
 let openHabitId = null;
 let historyUnit = 'week';
@@ -84,11 +85,28 @@ async function load() {
     return;
   }
   prunePending();
+  prunePendingConfig();
   renderUpdatedAt();
   renderAll();
 }
 
-function habits() { return (fullData && fullData.habits) || []; }
+// スナップショットの習慣に、依頼中の追加・削除を重ねたもの
+function habits() {
+  let list = ((fullData && fullData.habits) || []).slice();
+  pendingConfig.forEach((c) => {
+    if (c.op === 'add' && !list.some((h) => h.id === c.id)) {
+      list.push({ id: c.id, label: c.label, mode: c.mode, detect: 'manual', done: [] });
+    } else if (c.op === 'remove') {
+      list = list.filter((h) => h.id !== c.id);
+    }
+  });
+  return list;
+}
+
+// 日記（auto）以外はタップで記録できる。detect を持たない古いスナップショットでは日記だけ除く。
+function isRecordable(h) {
+  return h.detect ? h.detect !== 'auto' : h.id !== 'diary';
+}
 function habitById(id) { return habits().find((h) => h.id === id); }
 
 // データの先頭日。スコア・カレンダーはここから今日までを対象にする。
@@ -112,7 +130,9 @@ function doneSet(h) {
 
 function habitColor(id) {
   const mode = matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
-  return HABIT_COLORS[mode][id] || FALLBACK_COLOR[mode];
+  if (HABIT_COLORS[mode][id]) return HABIT_COLORS[mode][id];
+  const extra = habits().filter((h) => !HABIT_COLORS.light[h.id]).findIndex((h) => h.id === id);
+  return EXTRA_COLORS[Math.max(0, extra) % EXTRA_COLORS.length];
 }
 
 // ---------------------------------------------------------------- 集計
@@ -268,12 +288,12 @@ function onCheckTap(h, ymd) {
     return;
   }
   if (doneSet(h).has(ymd)) {
-    showToast(RECORDABLE.has(h.id)
+    showToast(isRecordable(h)
       ? '記録済みです。取り消しは Obsidian のストリームノートから行ってください'
       : shortDate(ymd) + ' は実施済みです（自動判定）');
     return;
   }
-  if (!RECORDABLE.has(h.id)) {
+  if (!isRecordable(h)) {
     showToast(h.label + ' は自動で判定される習慣なので、ここからは記録できません');
     return;
   }
@@ -300,17 +320,10 @@ function cancelQueued(key) {
 
 async function sendRecord(h, ymd) {
   const key = h.id + '|' + ymd;
-  const { url, token } = relaySettings();
   // 過去の日を記録するときは、その日の正午の時刻を送る（log_habit.py はエポックから日付を決める）
   const when = ymd === todayYmd() ? new Date() : new Date(parseYmd(ymd).getTime() + 12 * 3600000);
   try {
-    const res = await fetch(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'text/plain;charset=utf-8' }, // CORSプリフライトを避ける
-      body: JSON.stringify({ token, habit: h.id, epoch: String(Math.floor(when.getTime() / 1000)) }),
-    });
-    const data = await res.json();
-    if (!data.ok) throw new Error(data.error || 'unknown error');
+    await relayPost({ habit: h.id, epoch: String(Math.floor(when.getTime() / 1000)) });
     pending.push({ habit: h.id, ymd, sentAt: Date.now() });
     savePending();
   } catch (e) {
@@ -336,6 +349,104 @@ function prunePending() {
     return p.sentAt > cutoff;
   });
   savePending();
+}
+
+// ---------------------------------------------------------------- 習慣の追加・削除
+
+function loadPendingConfig() {
+  try { return JSON.parse(localStorage.getItem('habitPendingConfig') || '[]'); } catch (e) { return []; }
+}
+function savePendingConfig() {
+  try { localStorage.setItem('habitPendingConfig', JSON.stringify(pendingConfig)); } catch (e) { /* 致命的ではない */ }
+}
+function prunePendingConfig() {
+  const cutoff = Date.now() - CONFIG_TTL_MS;
+  const ids = new Set(((fullData && fullData.habits) || []).map((h) => h.id));
+  pendingConfig = pendingConfig.filter((c) => {
+    const reflected = c.op === 'add' ? ids.has(c.id) : !ids.has(c.id);
+    return !reflected && c.sentAt > cutoff;
+  });
+  savePendingConfig();
+}
+
+// 表示名は日本語なので、idは時刻から作る（英小文字+数字。Tasker から使うなら後で見て打てる長さ）
+function newHabitId() {
+  return 'h' + Date.now().toString(36);
+}
+
+async function relayPost(payload) {
+  const { url, token } = relaySettings();
+  if (!url || !token) throw new Error('記録の設定（中継URL・合言葉）が未入力です');
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'text/plain;charset=utf-8' }, // CORSプリフライトを避ける
+    body: JSON.stringify(Object.assign({ token }, payload)),
+  });
+  const data = await res.json();
+  if (!data.ok) throw new Error(data.error || 'unknown error');
+  return data;
+}
+
+async function addHabit() {
+  const labelEl = document.getElementById('new-habit-label');
+  const idEl = document.getElementById('new-habit-id');
+  const label = labelEl.value.trim();
+  const id = idEl.value.trim() || newHabitId();
+  const mode = document.getElementById('new-habit-mode').value;
+  if (!label) { showToast('表示名を入れてください'); return; }
+  if (!/^[a-z][a-z0-9_]{0,31}$/.test(id)) { showToast('IDは英小文字で始まる英小文字・数字・_ にしてください'); return; }
+  if (habits().some((h) => h.id === id)) { showToast('そのIDはもう使われています'); return; }
+  try {
+    await relayPost({ action: 'add-habit', id, label, mode });
+  } catch (e) {
+    showToast('追加できませんでした（' + String(e.message || e) + '）');
+    return;
+  }
+  pendingConfig = pendingConfig.filter((c) => c.id !== id);
+  pendingConfig.push({ op: 'add', id, label, mode, sentAt: Date.now() });
+  savePendingConfig();
+  labelEl.value = '';
+  idEl.value = '';
+  renderAll();
+  renderHabitManager();
+  showToast(label + ' を追加しました（Obsidian側への反映は数分後）');
+}
+
+async function removeHabit(h) {
+  if (!confirm(h.label + ' を一覧から削除しますか？\n（これまでの記録は Obsidian に残ります。同じID「' + h.id + '」で追加し直せば元に戻ります）')) return;
+  try {
+    await relayPost({ action: 'remove-habit', id: h.id });
+  } catch (e) {
+    showToast('削除できませんでした（' + String(e.message || e) + '）');
+    return;
+  }
+  pendingConfig = pendingConfig.filter((c) => c.id !== h.id);
+  pendingConfig.push({ op: 'remove', id: h.id, sentAt: Date.now() });
+  savePendingConfig();
+  renderAll();
+  renderHabitManager();
+  showToast(h.label + ' を削除しました');
+}
+
+function renderHabitManager() {
+  const list = document.getElementById('manage-list');
+  list.innerHTML = '';
+  habits().forEach((h) => {
+    const row = el('div', 'manage-row');
+    row.style.setProperty('--hc', habitColor(h.id));
+    const name = el('span', 'manage-name');
+    name.textContent = h.label;
+    const meta = el('span', 'manage-meta');
+    meta.textContent = h.id + (h.detect === 'auto' ? '・自動判定' : '') + (h.mode === 'log' ? '・回数' : '');
+    const del = el('button', 'manage-del');
+    del.textContent = '削除';
+    del.setAttribute('aria-label', h.label + ' を削除');
+    del.addEventListener('click', () => removeHabit(h));
+    row.appendChild(name);
+    row.appendChild(meta);
+    row.appendChild(del);
+    list.appendChild(row);
+  });
 }
 
 // ---------------------------------------------------------------- 描画: 詳細
@@ -374,7 +485,8 @@ function renderDetail() {
   body.appendChild(frequencyCard(h));
 
   const note = el('p', 'detail-note');
-  note.textContent = 'データの範囲: ' + dataStart() + ' 〜 今日（' + (diffDays(dataStart(), todayYmd()) + 1) + '日分）';
+  note.textContent = 'データの範囲: ' + dataStart() + ' 〜 今日（' + (diffDays(dataStart(), todayYmd()) + 1) + '日分）' +
+    '　Tasker用ID: ' + h.id;
   body.appendChild(note);
 
   // カレンダーは最新（右端）が見えるようにしておく
@@ -610,7 +722,7 @@ function calendarCard(h) {
   }
   scroll.appendChild(grid);
   c.appendChild(scroll);
-  if (RECORDABLE.has(h.id)) {
+  if (isRecordable(h)) {
     const n = el('p', 'card-note');
     n.textContent = 'マスをタップすると、その日の分を記録できます。';
     c.appendChild(n);
@@ -783,6 +895,7 @@ function openSettings() {
   document.getElementById('settings-url').value = url;
   document.getElementById('settings-token').value = token;
   document.getElementById('settings-reverse').checked = prefs().reverse;
+  renderHabitManager();
   document.getElementById('settings-modal').classList.remove('hidden');
 }
 
@@ -796,6 +909,7 @@ document.getElementById('settings-cancel').addEventListener('click', closeSettin
 document.getElementById('settings-modal').addEventListener('click', (e) => {
   if (e.target.id === 'settings-modal') closeSettings();
 });
+document.getElementById('new-habit-add').addEventListener('click', addHabit);
 document.getElementById('settings-save').addEventListener('click', () => {
   saveSettings(
     document.getElementById('settings-url').value.trim(),
