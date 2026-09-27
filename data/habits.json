@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-09-27 08:45",
+  "generatedAt": "2026-09-27 20:51",
   "days": [
     "2025-08-24",
     "2025-08-25",
@@ -541,7 +541,9 @@
       "label": "🦉 英語学習",
       "mode": "streak",
       "detect": "tasker-app",
-      "done": []
+      "done": [
+        "2026-09-27"
+      ]
     },
     {
       "id": "gijutsushi",
