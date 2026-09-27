@@ -575,7 +575,9 @@
       "label": "⏱ タイマー",
       "mode": "streak",
       "detect": "tasker-url",
-      "done": []
+      "done": [
+        "2026-09-26"
+      ]
     },
     {
       "id": "strength",
