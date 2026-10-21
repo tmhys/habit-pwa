@@ -643,7 +643,9 @@
       "label": "📗 読書",
       "mode": "streak",
       "detect": "book",
-      "done": []
+      "done": [
+        "2026-10-21"
+      ]
     }
   ]
 }
